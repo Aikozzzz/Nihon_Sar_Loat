@@ -45,7 +45,11 @@ export async function writeEntry(db: PoolClient, owner: string, input: unknown, 
       if (!example || typeof example !== "object") throw new AppError("Enter a valid example word.");
       const issue = kanjiExampleIssue(example, entry.term);
       if (issue) throw new AppError(issue.message);
-      return { term: normalize(example.term), reading: normalize(example.reading), meaning: example.meaning.trim(), partsOfSpeech: readPartsOfSpeech(example.partsOfSpeech) };
+      return {
+        term: normalize(example.term), reading: normalize(example.reading), meaning: example.meaning.trim(),
+        partsOfSpeech: readPartsOfSpeech(example.partsOfSpeech),
+        sentence: example.sentence?.trim() || undefined, translation: example.translation?.trim() || undefined,
+      };
     });
   }
   // The vocabulary identity uses a NUL separator, which PostgreSQL text cannot store.

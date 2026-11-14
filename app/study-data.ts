@@ -8,7 +8,10 @@ export const partOfSpeechLabels = {
   counter: "Counter", prefix: "Prefix", suffix: "Suffix", expression: "Expression", other: "Other",
 } as const;
 export type PartOfSpeech = keyof typeof partOfSpeechLabels;
-export type KanjiExample = { term: string; reading: string; meaning: string; partsOfSpeech?: PartOfSpeech[] };
+export type KanjiExample = {
+  term: string; reading: string; meaning: string; partsOfSpeech?: PartOfSpeech[];
+  sentence?: string; translation?: string;
+};
 export type SourceReference = { title: string; page?: number; document?: string };
 export type Pair = [string, string];
 export type Entry = {
@@ -53,6 +56,7 @@ export const formatOptions: Format[] = ["Notice", "Short article"];
 export type StudyState = { entries: Entry[]; pairs: Pair[]; imports: ImportSummary[]; passages: Passage[] };
 export const pageLimit = 20;
 export const fileLimit = 50 * 1024 * 1024;
+export const exampleSentenceLimit = 300;
 
 export function pageRange(value: string) {
   const match = value.trim().match(/^(\d+)(?:\s*[-–]\s*(\d+))?$/);
@@ -146,9 +150,20 @@ export function validateEntry(entry: Pick<Entry, "kind" | "term" | "reading" | "
 }
 
 export function kanjiExampleIssue(example: KanjiExample, kanji: string) {
-  return entryIssue({ ...example, kind: "Vocabulary" }) ??
+  const issue = entryIssue({ ...example, kind: "Vocabulary" }) ??
     (normalize(example.term) !== normalize(kanji) && normalize(example.term).includes(normalize(kanji))
       ? undefined : { field: "term" as const, message: `Enter a word that uses ${kanji}.` });
+  if (issue) return issue;
+  for (const field of ["sentence", "translation"] as const) {
+    const text = example[field];
+    if (text !== undefined && (typeof text !== "string" || text.includes("\0") || text.length > exampleSentenceLimit)) {
+      return { field, message: `Use up to ${exampleSentenceLimit} characters.` };
+    }
+  }
+  if (example.sentence?.trim() && !example.sentence.normalize("NFKC").includes(normalize(kanji))) {
+    return { field: "sentence" as const, message: `Use ${kanji} in the example sentence.` };
+  }
+  if (example.translation?.trim() && !example.sentence?.trim()) return { field: "sentence" as const, message: "Enter the Japanese example sentence." };
 }
 
 export function kanjiExampleKey(example: KanjiExample) {
@@ -171,6 +186,8 @@ export function mergeKanjiExamples(before: KanjiExample[], after: KanjiExample[]
     words.set(key, existing ? {
       ...existing, meaning: mergeMeanings(existing.meaning, example.meaning),
       partsOfSpeech: mergePartsOfSpeech(existing.partsOfSpeech, example.partsOfSpeech),
+      sentence: existing.sentence || example.sentence,
+      translation: existing.sentence && existing.sentence !== example.sentence ? existing.translation : existing.translation || example.translation,
     } : example);
   }
   return [...words.values()];

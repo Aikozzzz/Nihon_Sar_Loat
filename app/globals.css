@@ -175,6 +175,16 @@ rt { font-size: .54em; color: #595746; }
 .flash-answer h2 { font: 35px/1.1 var(--serif); }
 .flash-answer p { font-size: 19px; margin: 5px 0; }
 .flash-answer > div { color: var(--muted); margin-top: 7px; }
+.review-examples { margin-top: 14px; padding: 18px; }
+.review-examples h3 { margin: 0 0 8px; font-size: 16px; }
+.review-examples ul { margin: 0; padding: 0; list-style: none; }
+.review-examples li { padding-block: 10px; overflow-wrap: anywhere; }
+.review-examples li + li { border-top: 1px solid var(--line); }
+.review-word { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.review-word strong { font-size: 19px; }
+.review-word span { color: var(--muted); }
+.review-examples .parts-of-speech { margin-inline-start: 8px; }
+.review-examples .review-sentence { margin-top: 5px; }
 .rating-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-top: 12px; }
 .rating { min-height: 62px; display: grid; place-content: center; border-radius: 9px; text-align: center; }
 .rating:hover { box-shadow: inset 0 0 0 1px currentColor; }
@@ -232,7 +242,7 @@ input[type="checkbox"] { width: 18px; height: 18px; accent-color: #645131; }
 .kanji-example-fields legend { padding-inline: 4px; color: var(--muted); font-size: 12px; }
 .kanji-example-row { display: grid; grid-template-columns: minmax(0, .65fr) minmax(0, .85fr) minmax(0, 1fr); gap: 8px; align-items: start; }
 .editor .kanji-example-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.editor .kanji-example-row > label:last-of-type { grid-column: 1 / -1; }
+.editor .example-meaning, .example-sentence, .example-translation { grid-column: 1 / -1; }
 .kanji-example-preview { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; }
 .kanji-example-preview .icon-button { margin-inline-start: auto; }
 .kanji-examples { display: grid; gap: 4px; margin-block: 3px; }
@@ -313,7 +323,7 @@ input[type="checkbox"] { width: 18px; height: 18px; accent-color: #645131; }
   .candidate-preview { margin-inline-start: 0; }
   .candidate-meaning, .candidate > .kanji-example-fields, .candidate > .part-of-speech-fields { grid-column: 1 / -1; }
   .candidate .kanji-example-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .candidate .kanji-example-row > label:last-of-type { grid-column: 1 / -1; }
+  .candidate .example-meaning { grid-column: 1 / -1; }
 }
 
 @media (max-height: 515px) and (min-width: 761px) {

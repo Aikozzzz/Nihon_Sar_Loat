@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
-import { fileLimit, importKindForJob, importKindFromFilename, mergeKanjiExamples, normalize, normalizeReading, pageRange, partOfSpeechLabels, type Candidate, type Entry, type ImportJob, type ImportKind, type ImportPage, type ImportSummary, type KanjiExample } from "../app/study-data.ts";
+import { exampleSentenceLimit, fileLimit, importKindForJob, importKindFromFilename, mergeKanjiExamples, normalize, normalizeReading, pageRange, partOfSpeechLabels, type Candidate, type Entry, type ImportJob, type ImportKind, type ImportPage, type ImportSummary, type KanjiExample } from "../app/study-data.ts";
 import { AppError, database, lockAccount, metric, transaction } from "./database.ts";
 import { requireGroq } from "./groq.ts";
 import { field, identifier, object, readBytes } from "./http.ts";
@@ -271,7 +271,7 @@ export async function finishPage(job: string, page: number, lease: string, ocr: 
 }
 
 const partsOfSpeech = { type: "array", items: { type: "string", enum: Object.keys(partOfSpeechLabels) } };
-const exampleFields = { term: { type: "string" }, reading: { type: "string" }, meaning: { type: "string" }, partsOfSpeech };
+const exampleFields = { term: { type: "string" }, reading: { type: "string" }, meaning: { type: "string" }, partsOfSpeech, sentence: { type: "string" }, translation: { type: "string" } };
 const candidateFields = {
   kind: { type: "string", enum: ["Kanji", "Vocabulary"] }, term: { type: "string" },
   reading: { type: "string" }, meaning: { type: "string" }, confidence: { type: "string", enum: ["high", "low"] },
@@ -314,9 +314,13 @@ export function parseCandidates(value: unknown, name: string, page: number, ocr:
       const word = object(raw);
       const spelling = normalize(field(word.term, "example spelling", 60));
       if (spelling === term || !spelling.includes(term)) throw new AppError("Groq returned an example without its kanji. Retry this page.", 502);
+      const sentence = field(word.sentence, "example sentence", exampleSentenceLimit, true);
+      const usesKanji = sentence.normalize("NFKC").includes(term);
       return {
         term: spelling, reading: field(word.reading, "example furigana", 160, true),
         meaning: field(word.meaning, "example meaning", 500, true), partsOfSpeech: readPartsOfSpeech(word.partsOfSpeech, 502),
+        sentence: usesKanji ? sentence : undefined,
+        translation: usesKanji ? field(word.translation, "example translation", exampleSentenceLimit, true) : undefined,
       };
     });
     return {
