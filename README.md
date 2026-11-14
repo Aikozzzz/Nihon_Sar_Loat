@@ -33,3 +33,13 @@ The transfer preserves account verification, password hashes, study history, and
 - Run `npm run build`, then run `npm start` and `npm run worker` as supervised processes with the same `DATABASE_URL`. PostgreSQL stores study records and temporary PDF uploads in the private `nihon_private` schema. Keep the connection string server-side. Configure the reverse proxy to accept 50 MB PDF uploads and allow at least 100 seconds for reading generation. Confirm the applicable Groq retention settings before accepting learner uploads.
 
 Provider setup details are available in the [Supabase connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres), [Groq Structured Outputs documentation](https://console.groq.com/docs/structured-outputs), and [Resend email API reference](https://resend.com/docs/api-reference/emails/send-email).
+
+## CI/CD on GitHub and Vercel
+
+The [CI workflow](.github/workflows/ci.yml) checks pull requests targeting `main` and pushes to `main`. It installs from the npm lockfile, builds Next.js, checks TypeScript, and builds and smoke-tests the Linux PDF worker image. The job uses no deployment secrets.
+
+1. In Vercel, link the repository and set `main` as the production branch. Keep automatic production domain assignment enabled. Vercel builds previews from Git and rolls out the PDF daemon when a deployment goes live in production.
+2. Once GitHub has run CI on a commit on `main`, open **Settings → Build and Deployment → Deployment Checks** in Vercel. Choose **Add Checks → GitHub** and require **Build web and PDF worker**. With this check enabled, Vercel waits for CI to pass before promoting the production build. [Vercel Deployment Checks](https://vercel.com/docs/deployment-checks#adding-github-checks)
+3. In GitHub, add a ruleset for `main` that requires a pull request and the **Build web and PDF worker** status check to pass before merging. [GitHub branch protection](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
+
+Keep production credentials in Vercel's **Production** environment. Apply new SQL migrations to the target Supabase project before merging code that requires them. The GitHub Actions job builds the worker image, while Vercel's Daemon runtime starts the worker in production. On Vercel, PDF uploads through the existing API route are subject to the [4.5 MB Functions payload limit](https://vercel.com/docs/functions/limitations#request-body-size).
