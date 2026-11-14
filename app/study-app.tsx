@@ -10,7 +10,8 @@ import { LibraryView, PageHeading, ReviewView } from "./study-views";
 import { ImportView, importLabels } from "./import-view";
 import { ReadingView } from "./reading-view";
 import { api, errorMessage, post } from "./study-api";
-import type { Entry, ImportSummary, Pair, Passage, Rating, StudyState } from "./study-data";
+import { dueReviewCards } from "./kanji-review-examples";
+import type { CompoundReview, Entry, ImportSummary, KanjiExample, Pair, Passage, Rating, ReviewCard, StudyState } from "./study-data";
 
 const navigation = [
   { id: "home", label: "Home", icon: House },
@@ -30,9 +31,9 @@ function currentView(): View {
   return navigation.find((item) => item.id === active)?.id ?? "home";
 }
 
-function Home({ entries, latest, openReview }: { entries: Entry[]; latest?: ImportSummary; openReview: (mode: "Due" | "Hard") => void }) {
+function Home({ entries, compoundReviews, latest, openReview }: { entries: Entry[]; compoundReviews: CompoundReview[]; latest?: ImportSummary; openReview: (mode: "Due" | "Hard") => void }) {
   const kanji = entries.filter((entry) => entry.kind === "Kanji");
-  const due = kanji.filter((entry) => !entry.dueAt || entry.dueAt <= Date.now()).length;
+  const due = dueReviewCards(entries, compoundReviews).length;
   const hard = kanji.filter((entry) => entry.rating === "Hard").length;
   return (
     <>
@@ -43,7 +44,7 @@ function Home({ entries, latest, openReview }: { entries: Entry[]; latest?: Impo
         <div className="daily-copy">
           <span className="hero-label"><Layers3 size={15} /> KANJI FLASHCARDS</span>
           <h2 id="daily-title">Today’s review</h2>
-          <p>{due > 0 ? <><strong>{due} kanji</strong> are ready for a review.</> : kanji.length ? "You’re caught up on your due kanji." : "Add your first kanji or try a sample review."}</p>
+          <p>{due > 0 ? <><strong>{due} {due === 1 ? "card" : "cards"}</strong> {due === 1 ? "is" : "are"} ready for review.</> : kanji.length ? "You’re caught up on today’s review." : "Add your first kanji or try a sample review."}</p>
           {kanji.length ? <button className="button ink" onClick={() => openReview("Due")}>Start review <ArrowRight size={17} /></button> : <div className="flex flex-wrap gap-2"><a className="button ink" href="#add-kanji">Add a kanji <ArrowRight size={17} /></a><a className="button secondary" href="/demo">Try sample flashcards</a></div>}
         </div>
       </section>
@@ -143,7 +144,13 @@ export function StudyApp({ initial }: { initial: StudyState }) {
     setStudy((current) => ({ ...current, ...result }));
   }
 
-  async function rateEntry(entry: Entry, rating: Rating, event: string) {
+  async function rateEntry(entry: ReviewCard, rating: Rating, event: string) {
+    if (entry.kind === "Compound") {
+      const { kanji, term, reading } = entry;
+      const compoundReviews = await post<CompoundReview[]>("rate-compound", { kanji, term, reading, rating, event });
+      setStudy((current) => ({ ...current, compoundReviews }));
+      return;
+    }
     const entries = await post<Entry[]>("rate", { id: entry.id, rating, event });
     setStudy((current) => ({ ...current, entries }));
   }
@@ -151,6 +158,11 @@ export function StudyApp({ initial }: { initial: StudyState }) {
   async function addPair(first: string, second: string) {
     const pairs = await post<Pair[]>("pair", { first, second });
     setStudy((current) => ({ ...current, pairs }));
+  }
+
+  async function addReviewExamples(id: string, examples: KanjiExample[]) {
+    const entries = await post<Entry[]>("add-kanji-review-examples", { id, examples });
+    setStudy((current) => ({ ...current, entries }));
   }
 
   async function signOut() {
@@ -212,9 +224,9 @@ export function StudyApp({ initial }: { initial: StudyState }) {
         ) : null}
         <main id="main-content" tabIndex={-1} className="main-content">
           {error ? <p className="error" role="alert">{error}</p> : null}
-          {view === "home" ? <Home entries={study.entries} latest={study.imports[0]} openReview={openReview} /> : null}
+          {view === "home" ? <Home entries={study.entries} compoundReviews={study.compoundReviews} latest={study.imports[0]} openReview={openReview} /> : null}
           {view === "library" ? <LibraryView key={String(openEditor)} addInitially={openEditor} entries={study.entries} pairs={study.pairs} addPair={addPair} save={saveEntry} remove={removeEntry} reviewHard={() => openReview("Hard")} reviewComparison={reviewComparison} /> : null}
-          {view === "review" ? <ReviewView key={sessionKey} entries={study.entries} requested={reviewRequest} comparison={comparisonQueue} rate={rateEntry} /> : null}
+          {view === "review" ? <ReviewView key={sessionKey} entries={study.entries} compoundReviews={study.compoundReviews} requested={reviewRequest} comparison={comparisonQueue} rate={rateEntry} addExamples={addReviewExamples} /> : null}
           {view === "reading" ? <ReadingView entries={study.entries} saved={study.passages} onSaved={(passages: Passage[]) => setStudy((current) => ({ ...current, passages }))} /> : null}
           {view === "imports" ? <ImportView imports={study.imports} update={(next) => setStudy((current) => ({
             ...current, imports: typeof next === "function" ? next(current.imports) : next,

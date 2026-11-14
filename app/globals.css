@@ -158,7 +158,7 @@ rt { font-size: .54em; color: #595746; }
 .editor label, .form-panel label { display: grid; gap: 5px; font-size: 13px; font-weight: 750; }
 .editor-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 5px; }
 
-.review-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
+.review-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr)); gap: 15px; }
 .review-option { display: flex; flex-direction: column; align-items: start; gap: 8px; padding: 19px; text-align: left; }
 .review-option:hover { border-color: #bdab83; }
 .review-option > strong { font: 34px/1 var(--serif); margin-top: 4px; }
@@ -172,6 +172,9 @@ rt { font-size: .54em; color: #595746; }
 .session progress::-moz-progress-bar { background: #896b36; border-radius: 8px; }
 .flashcard { min-height: 340px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 25px 14px; text-align: center; background: #fffdf6; }
 .flash-kanji { font-size: 105px; line-height: 1.15; }
+.flash-compound { max-width: 100%; font-size: clamp(36px, 8vw, 70px); line-height: 1.2; overflow-wrap: anywhere; }
+.flash-example { padding-top: 8px; overflow-wrap: anywhere; }
+.flash-example p.muted { font-size: 14px; }
 .flash-answer h2 { font: 35px/1.1 var(--serif); }
 .flash-answer p { font-size: 19px; margin: 5px 0; }
 .flash-answer > div { color: var(--muted); margin-top: 7px; }
@@ -185,6 +188,14 @@ rt { font-size: .54em; color: #595746; }
 .review-word span { color: var(--muted); }
 .review-examples .parts-of-speech { margin-inline-start: 8px; }
 .review-examples .review-sentence { margin-top: 5px; }
+.kanji-details-search { margin: 10px 0 14px; }
+.kanji-details-list { list-style: none; margin: 0; padding: 0 16px; }
+.kanji-details-list li + li { border-top: 1px solid var(--line); }
+.kanji-details-list button { width: 100%; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; text-align: left; align-items: center; min-height: 62px; }
+.kanji-details-list strong { font-size: 27px; }
+.kanji-details-list small { display: block; color: var(--muted); overflow-wrap: anywhere; }
+.kanji-detail-card { margin-top: 10px; padding: 18px; }
+.kanji-detail-card h2 { font-size: 38px; line-height: 1.1; margin: 0 0 8px; }
 .rating-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-top: 12px; }
 .rating { min-height: 62px; display: grid; place-content: center; border-radius: 9px; text-align: center; }
 .rating:hover { box-shadow: inset 0 0 0 1px currentColor; }

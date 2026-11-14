@@ -1,4 +1,4 @@
-import { kanjiExampleKey, type Entry, type KanjiExample } from "./study-data.ts";
+import { kanjiExampleKey, type CompoundCard, type CompoundReview, type Entry, type KanjiExample, type ReviewCard } from "./study-data.ts";
 
 const hai: KanjiExample[] = [
   { term: "配る", reading: "くばる", meaning: "to hand out", sentence: "授業の前に先生がプリントを配った。", translation: "The teacher handed out worksheets before class." },
@@ -8,7 +8,7 @@ const hai: KanjiExample[] = [
   { term: "配分", reading: "はいぶん", meaning: "allocation", sentence: "試験では時間の配分に気をつけよう。", translation: "Pay attention to how you allocate your time during the exam." },
 ];
 
-export function reviewExamples(card: Entry, entries: Entry[], suggestions: KanjiExample[]) {
+export function reviewExamples(card: Entry, entries: Entry[], suggestions: KanjiExample[] = []) {
   const vocabulary = entries.filter(({ kind, term }) => kind === "Vocabulary" && term !== card.term && term.includes(card.term));
   const examples = new Map<string, KanjiExample>();
   const words: KanjiExample[] = [...(card.examples ?? []), ...vocabulary, ...(card.term === "配" ? hai : []), ...suggestions];
@@ -21,4 +21,31 @@ export function reviewExamples(card: Entry, entries: Entry[], suggestions: Kanji
     }
   }
   return [...examples.values()];
+}
+
+export function dueReviewCards(entries: Entry[], reviews: CompoundReview[], now = Date.now()) {
+  const schedule = new Map(reviews.map((review) => [kanjiExampleKey(review), review.dueAt]));
+  const cards: ReviewCard[] = [];
+  const compounds = new Map<string, CompoundCard>();
+  const kanji = entries.filter((entry) => entry.kind === "Kanji");
+  const vocabulary = entries.filter((entry) => entry.kind === "Vocabulary");
+  for (const card of kanji) {
+    if (!card.dueAt || card.dueAt <= now) cards.push(card);
+    for (const example of reviewExamples(card, vocabulary)) {
+      const id = kanjiExampleKey(example);
+      if ((schedule.get(id) ?? 0) > now) continue;
+      const existing = compounds.get(id);
+      if (existing) {
+        if (!existing.sentence && example.sentence) {
+          existing.sentence = example.sentence;
+          existing.translation = example.translation;
+        }
+        continue;
+      }
+      const compound: CompoundCard = { ...example, id, kind: "Compound", kanji: card.term };
+      compounds.set(id, compound);
+      cards.push(compound);
+    }
+  }
+  return cards;
 }

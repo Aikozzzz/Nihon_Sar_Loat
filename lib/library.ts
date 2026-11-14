@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
-import type { PoolClient } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { entryKey, intervals, isPartOfSpeech, kanjiExampleIssue, mergeKanjiExamples, mergeMeanings, mergePartsOfSpeech, normalize, normalizeReading, validateEntry, type Entry, type KanjiExample, type Pair, type PartOfSpeech, type Passage, type Rating, type SourceReference } from "../app/study-data.ts";
 import { AppError, database, lockAccount, transaction } from "./database.ts";
 
 type EntryRow = Omit<Entry, "source" | "page" | "sources" | "rating" | "dueAt"> & { rating: Rating | null; due: number | null; studied: number; parts_of_speech: PartOfSpeech[] };
 type ReferenceRow = { title: string; document: string; page: number };
 
-export async function entriesFor(owner: string): Promise<Entry[]> {
-  const { rows } = await database().query<EntryRow & { refs: ReferenceRow[] | null }>(`
+export async function entriesFor(owner: string, db: Pool | PoolClient = database()): Promise<Entry[]> {
+  const { rows } = await db.query<EntryRow & { refs: ReferenceRow[] | null }>(`
     SELECT e.id, e.kind, e.term, e.reading, e.meaning, e.rating, e.due, e.studied, e.examples, e.parts_of_speech,
       (SELECT jsonb_agg(jsonb_build_object('title', s.title, 'document', s.document, 'page', s.page) ORDER BY s.title, s.page)
         FROM nihon_private.sources s WHERE s.entry=e.id) AS refs

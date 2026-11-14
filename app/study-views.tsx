@@ -1,14 +1,14 @@
 "use client";
 
 import {
-  ArrowLeft, ArrowRight, CheckCircle2, Clock3, Flame,
+  ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Clock3, Flame,
   GitCompareArrows, Layers3, Pencil, Plus, RotateCcw, Search, Star, X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { errorMessage, post } from "./study-api";
-import { reviewExamples } from "./kanji-review-examples";
+import { dueReviewCards, reviewExamples } from "./kanji-review-examples";
 import { isCommonJlptKanji } from "./jlpt-kanji";
-import { exampleSentenceLimit, intervals, kana, kanjiExampleIssue, kanjiExampleKey, partOfSpeechLabels, references, sourceTitles, type Entry, type ImportExample, type KanjiExample, type Kind, type Pair, type PartOfSpeech, type Rating } from "./study-data";
+import { exampleSentenceLimit, intervals, kana, kanjiExampleIssue, kanjiExampleKey, partOfSpeechLabels, references, sourceTitles, type CompoundReview, type Entry, type ImportExample, type KanjiExample, type Kind, type Pair, type PartOfSpeech, type Rating, type ReviewCard } from "./study-data";
 
 export function PageHeading({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
@@ -110,11 +110,18 @@ function KanjiExamples({ examples }: { examples?: KanjiExample[] }) {
   ))}</div> : null;
 }
 
-function KanjiReviewExamples({ card, entries, allowSuggestions }: { card: Entry; entries: Entry[]; allowSuggestions: boolean }) {
+function ExampleSentence({ word }: { word: KanjiExample }) {
+  return <>{word.sentence ? <p className="review-sentence" lang="ja">{word.sentence}</p> : null}
+    {word.translation ? <p className="muted">{word.translation}</p> : null}</>;
+}
+
+function KanjiReviewExamples({ card, entries, addExamples }: { card: Entry; entries: Entry[]; addExamples: (id: string, examples: KanjiExample[]) => Promise<void> }) {
   const [suggestions, setSuggestions] = useState<KanjiExample[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const words = reviewExamples(card, entries, suggestions);
+  const knownWords = new Map(reviewExamples(card, entries).map((word) => [kanjiExampleKey(word), word]));
+  const canAdd = suggestions.some((word) => !knownWords.get(kanjiExampleKey(word))?.sentence);
 
   async function suggest() {
     setLoading(true);
@@ -124,7 +131,19 @@ function KanjiReviewExamples({ card, entries, allowSuggestions }: { card: Entry;
     finally { setLoading(false); }
   }
 
-  if (!words.length && !allowSuggestions) return null;
+  async function add() {
+    setLoading(true);
+    setError("");
+    try {
+      await addExamples(card.id, suggestions.filter((word) => !knownWords.get(kanjiExampleKey(word))?.sentence).map((word) => {
+        const known = knownWords.get(kanjiExampleKey(word));
+        return known ? { ...word, term: known.term, reading: known.reading, meaning: known.meaning } : word;
+      }));
+      setSuggestions([]);
+    } catch (problem) { setError(errorMessage(problem)); }
+    finally { setLoading(false); }
+  }
+
   return (
     <section className="panel review-examples" aria-label="Words and expressions">
       <h3>Words and expressions</h3>
@@ -132,14 +151,43 @@ function KanjiReviewExamples({ card, entries, allowSuggestions }: { card: Entry;
         <li key={kanjiExampleKey(word)}>
           <div className="review-word"><strong lang="ja">{word.term}</strong> <span lang="ja">{kana(word.reading)}</span></div>
           <p>{word.meaning}<PartsOfSpeech parts={word.partsOfSpeech} /></p>
-          {word.sentence ? <p className="review-sentence" lang="ja">{word.sentence}</p> : null}
-          {word.translation ? <p className="muted">{word.translation}</p> : null}
+          <ExampleSentence word={word} />
         </li>
       ))}</ul> : <p className="muted">Suggest words that use {card.term} to practise it in context.</p>}
-      {allowSuggestions && !suggestions.length ? <button type="button" className="text-button" disabled={loading} onClick={suggest}>{loading ? "Finding examples…" : "Suggest examples with AI"}</button> : null}
-      {suggestions.length ? <p className="muted">AI suggestions are for this review.</p> : null}
+      {!suggestions.length ? <button type="button" className="text-button" disabled={loading} onClick={suggest}>{loading ? "Finding examples…" : "Suggest examples with AI"}</button> : null}
+      {suggestions.length ? <p className="muted">Review the AI suggestions before adding them.</p> : null}
+      {canAdd ? <button type="button" className="button secondary" disabled={loading} onClick={add}>{loading ? "Saving…" : "Add suggestions to review"}</button> : null}
       {error ? <p className="error" role="alert">{error}</p> : null}
     </section>
+  );
+}
+
+function KanjiDetails({ entries, addExamples, close }: { entries: Entry[]; addExamples: (id: string, examples: KanjiExample[]) => Promise<void>; close: () => void }) {
+  const [query, setQuery] = useState("");
+  const [id, setId] = useState("");
+  const cards = entries.filter((entry) => entry.kind === "Kanji");
+  const card = cards.find((entry) => entry.id === id);
+  const search = kana(query).toLowerCase();
+  const filtered = cards.filter((entry) => [entry.term, entry.reading, entry.meaning].some((value) => kana(value).toLowerCase().includes(search)));
+  return (
+    <>
+      <PageHeading title="Kanji Details">Browse the kanji you’ve learnt and the words that use them.</PageHeading>
+      <button type="button" className="text-button" onClick={card ? () => setId("") : close}><ArrowLeft size={16} /> {card ? "All kanji details" : "Review options"}</button>
+      {card ? <>
+        <article className="panel kanji-detail-card">
+          <h2><span lang="ja">{card.term}</span><JlptStar entry={card} /></h2>
+          <p lang="ja">{card.reading}</p><p>{card.meaning}</p>
+        </article>
+        <KanjiReviewExamples key={card.id} card={card} entries={entries} addExamples={addExamples} />
+      </> : <>
+        <label className="search-box kanji-details-search"><Search size={18} /><input aria-label="Search kanji details" placeholder="Search kanji, readings, or meanings" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+        {filtered.length ? <ul className="panel kanji-details-list">{filtered.map((entry) => <li key={entry.id}>
+          <button type="button" onClick={() => { setId(entry.id); window.scrollTo(0, 0); }}>
+            <strong lang="ja">{entry.term}</strong><span><span lang="ja">{entry.reading}</span><small>{entry.meaning}</small></span><ArrowRight size={17} />
+          </button>
+        </li>)}</ul> : <Empty icon={<Search size={21} />} title={cards.length ? "No matching kanji" : "No kanji yet"}>{cards.length ? "Try a different search." : "Save a kanji to your library to see its details here."}</Empty>}
+      </>}
+    </>
   );
 }
 
@@ -314,19 +362,18 @@ export function LibraryView({ entries, pairs, addPair, save, remove, reviewHard,
 
 type Mode = "Due" | "Hard" | "All";
 const modes = [
-  { name: "Due", title: "Due today", icon: Clock3, description: "Practise new kanji and cards due for review." },
+  { name: "Due", title: "Due today", icon: Clock3, description: "Practise kanji and their compounds when each card is due." },
   { name: "Hard", title: "Hard kanji", icon: Flame, description: "Focus on the characters you’ve flagged Hard." },
   { name: "All", title: "All kanji", icon: Layers3, description: "Practise every character in your library." },
 ] as const;
 
-function reviewQueue(entries: Entry[], mode: Mode) {
-  return entries.filter((item) => item.kind === "Kanji" && (
-    mode === "All" || (mode === "Hard" ? item.rating === "Hard" : !item.dueAt || item.dueAt <= Date.now())
-  ));
+function reviewQueue(entries: Entry[], reviews: CompoundReview[], mode: Mode): ReviewCard[] {
+  if (mode === "Due") return dueReviewCards(entries, reviews);
+  return entries.filter((item) => item.kind === "Kanji" && (mode === "All" || item.rating === "Hard"));
 }
 
-export function FlashcardSession({ queue, mode, entries, rate, close }: {
-  queue: Entry[]; mode: Mode | "Similar" | "Sample"; entries: Entry[]; rate: (entry: Entry, rating: Rating, event: string) => Promise<void>; close: () => void;
+export function FlashcardSession({ queue, mode, rate, close }: {
+  queue: ReviewCard[]; mode: Mode | "Similar" | "Sample"; rate: (card: ReviewCard, rating: Rating, event: string) => Promise<void>; close: () => void;
 }) {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -369,7 +416,7 @@ export function FlashcardSession({ queue, mode, entries, rate, close }: {
     <div className="panel empty review-finish">
       <span className="icon-tile sage"><CheckCircle2 size={23} /></span>
       <h2 tabIndex={-1} ref={finished}>Review complete</h2>
-      <p>You reviewed {queue.length} {queue.length === 1 ? "kanji card" : "kanji cards"}.</p>
+      <p>You reviewed {queue.length} {queue.length === 1 ? "card" : "cards"}.</p>
       <button className="button ink" onClick={close}>{mode === "Sample" ? "Open study dashboard" : "Back to review"}</button>
     </div>
   );
@@ -380,41 +427,47 @@ export function FlashcardSession({ queue, mode, entries, rate, close }: {
       <progress value={index + 1} max={queue.length} aria-label="Session progress" />
       <div className="flashcard panel">
         <span className="hero-label">{flipped ? "ANSWER" : "RECALL THE READING AND MEANING"}</span>
-        <span className="flash-kanji"><span lang="ja">{card.term}</span><JlptStar entry={card} /></span>
-        {flipped ? <div className="flash-answer"><p lang="ja">{card.reading}</p><h2 tabIndex={-1} ref={answer}>{card.meaning}</h2></div> : (
+        <span className={card.kind === "Compound" ? "flash-compound" : "flash-kanji"}><span lang="ja">{card.term}</span>{card.kind === "Compound" ? null : <JlptStar entry={card} />}</span>
+        {flipped ? <div className="flash-answer"><p lang="ja">{card.kind === "Compound" ? kana(card.reading) : card.reading}</p><h2 tabIndex={-1} ref={answer}>{card.meaning}</h2>
+          {card.kind === "Compound" && card.sentence ? <div className="flash-example"><ExampleSentence word={card} /></div> : null}
+        </div> : (
           <button ref={flipButton} className="button ink" onClick={() => { advanceLock.current = false; setFlipped(true); }}><RotateCcw size={16} /> Show answer</button>
         )}
       </div>
-      {flipped ? <KanjiReviewExamples key={card.id} card={card} entries={entries} allowSuggestions={mode !== "Sample"} /> : null}
       {flipped ? <div className="rating-buttons">{(Object.keys(intervals) as Rating[]).map((rating) => <button key={rating} className={`rating ${rating.toLowerCase()}`} disabled={saving} onClick={() => submitRating(rating)}><strong>{rating}</strong>{mode === "Sample" ? null : <span>{intervals[rating]} {intervals[rating] === 1 ? "day" : "days"}</span>}</button>)}</div> : null}
       {error ? <p className="error" role="alert">{error}</p> : null}
     </section>
   );
 }
 
-export function ReviewView({ entries, requested, comparison, rate }: { entries: Entry[]; requested?: Mode; comparison: Entry[]; rate: (entry: Entry, rating: Rating, event: string) => Promise<void> }) {
+export function ReviewView({ entries, compoundReviews, requested, comparison, rate, addExamples }: { entries: Entry[]; compoundReviews: CompoundReview[]; requested?: Mode; comparison: Entry[]; rate: (card: ReviewCard, rating: Rating, event: string) => Promise<void>; addExamples: (id: string, examples: KanjiExample[]) => Promise<void> }) {
+  const [details, setDetails] = useState(false);
   const [mode, setMode] = useState<Mode | "Similar" | null>(comparison.length ? "Similar" : requested ?? null);
-  const [queue, setQueue] = useState(() => comparison.length ? comparison : requested ? reviewQueue(entries, requested) : []);
+  const [queue, setQueue] = useState(() => comparison.length ? comparison : requested ? reviewQueue(entries, compoundReviews, requested) : []);
 
   function start(next: Mode) {
-    setQueue(reviewQueue(entries, next));
+    setQueue(reviewQueue(entries, compoundReviews, next));
     setMode(next);
   }
 
+  if (details) return <KanjiDetails entries={entries} addExamples={addExamples} close={() => setDetails(false)} />;
   return (
     <>
       <PageHeading title="Kanji review">Recall the reading and meaning, then rate how well you remembered.</PageHeading>
-      {mode ? queue.length ? <FlashcardSession queue={queue} mode={mode} entries={entries} rate={rate} close={() => setMode(null)} /> : (
+      {mode ? queue.length ? <FlashcardSession queue={queue} mode={mode} rate={rate} close={() => setMode(null)} /> : (
         <Empty icon={<CheckCircle2 size={22} />} title={mode === "Hard" ? "No hard kanji yet" : "No cards in this session"} action={<button className="button secondary" onClick={() => setMode(null)}>Review options</button>}>
           {mode === "Hard" ? "Rate a card Hard during regular review to add it here." : "Choose another session or add kanji to your library."}
         </Empty>
       ) : <div className="review-options">{modes.map(({ name, title, icon: Icon, description }) => {
-        const count = reviewQueue(entries, name).length;
+        const count = reviewQueue(entries, compoundReviews, name).length;
         return <button key={name} className="panel review-option" onClick={() => start(name)}>
           <span className={`icon-tile ${name === "Hard" ? "rose" : name === "Due" ? "gold" : "lavender"}`}><Icon size={22} /></span>
           <strong>{title}</strong><span>{description}</span><span className="review-option-footer">{count} {count === 1 ? "card" : "cards"} <ArrowRight size={18} /></span>
         </button>;
-      })}</div>}
+      })}<button type="button" className="panel review-option" onClick={() => setDetails(true)}>
+        <span className="icon-tile neutral"><BookOpen size={22} /></span><strong>Kanji Details</strong><span>Browse readings, meanings, and example sentences.</span>
+        <span className="review-option-footer">Browse kanji <ArrowRight size={18} /></span>
+      </button></div>}
     </>
   );
 }
