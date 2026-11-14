@@ -179,8 +179,8 @@ export function ImportView({ imports, update, confirm }: {
       id: job.id,
       selection: selected.map(({ id, term, reading, meaning, examples, partsOfSpeech }) => ({
         id, term, reading, meaning, confirmedPartsOfSpeech: partsOfSpeech,
-        examples: examples?.map(({ term, reading, meaning, partsOfSpeech }) => ({
-          term, reading, meaning, confirmedPartsOfSpeech: partsOfSpeech,
+        examples: examples?.map(({ term, reading, meaning, partsOfSpeech, sentence, translation }) => ({
+          term, reading, meaning, sentence, translation, confirmedPartsOfSpeech: partsOfSpeech,
         })),
       })),
     });

@@ -73,6 +73,7 @@ async function processPage(job: Job) {
       "For a clearly identified kanji or vocabulary headword, fill missing furigana and English meaning using common dictionary readings and senses. Use the surrounding examples to choose the sense or reading when they provide enough context. For standalone kanji, suggest common readings even if the page gives no example. For vocabulary with several plausible readings or senses, suggest a value only when the source or common usage makes it clear.",
       "In aiFields, include reading and/or meaning for each headword value you supplied from your own knowledge. Mark entries low confidence if you supplied a value or if the source is uncertain. Leave an individual field empty only when you cannot offer a reliable suggestion. If the headword itself cannot be identified reliably, skip it.",
       "For each Vocabulary headword and kanji example, label the partsOfSpeech that match the senses in the source. Distinguish i-adjective from na-adjective by grammar. Use multiple labels only when supported, such as noun and na-adjective. A bare suru-noun with only a noun sense is a noun. Use an empty partsOfSpeech array when uncertain or for single Kanji entries.",
+      "For each attached kanji example word, include one short, original, natural Japanese sentence using that word in the given sense and its English translation. Use empty strings for sentence and translation if you cannot write a reliable example.",
       "Return an empty array when the page has no useful targets.",
     ];
     if (importKind === "Kanji") {

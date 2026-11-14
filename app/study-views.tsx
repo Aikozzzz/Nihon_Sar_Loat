@@ -5,9 +5,10 @@ import {
   GitCompareArrows, Layers3, Pencil, Plus, RotateCcw, Search, Star, X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { errorMessage } from "./study-api";
+import { errorMessage, post } from "./study-api";
+import { reviewExamples } from "./kanji-review-examples";
 import { isCommonJlptKanji } from "./jlpt-kanji";
-import { intervals, kana, kanjiExampleIssue, kanjiExampleKey, partOfSpeechLabels, references, sourceTitles, type Entry, type ImportExample, type KanjiExample, type Kind, type Pair, type PartOfSpeech, type Rating } from "./study-data";
+import { exampleSentenceLimit, intervals, kana, kanjiExampleIssue, kanjiExampleKey, partOfSpeechLabels, references, sourceTitles, type Entry, type ImportExample, type KanjiExample, type Kind, type Pair, type PartOfSpeech, type Rating } from "./study-data";
 
 export function PageHeading({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
@@ -67,7 +68,8 @@ function PartsOfSpeech({ parts }: { parts?: PartOfSpeech[] }) {
 export function KanjiExampleFields({ examples, kanji, prefix, showIssues = false, change }: {
   examples: ImportExample[]; kanji: string; prefix: string; showIssues?: boolean; change: (examples: ImportExample[]) => void;
 }) {
-  const fields = [["term", "Spelling", 60], ["reading", "Furigana", 160], ["meaning", "English meaning", 500]] as const;
+  const fields = [["term", "Spelling", 60], ["reading", "Furigana", 160], ["meaning", "English meaning", 500],
+    ["sentence", "Example sentence (optional)", exampleSentenceLimit], ["translation", "Sentence translation (optional)", exampleSentenceLimit]] as const;
   return (
     <fieldset className="kanji-example-fields">
       <legend>Example words</legend>
@@ -83,9 +85,9 @@ export function KanjiExampleFields({ examples, kanji, prefix, showIssues = false
               const id = `${prefix}-example-${index}-${field}`;
               const invalid = issue?.field === field;
               return (
-                <label className="candidate-field" key={field}>
+                <label className={`candidate-field example-${field}`} key={field}>
                   {label}
-                  <input id={id} maxLength={maxLength} lang={field === "meaning" ? "en" : "ja"} value={example[field]}
+                  <input id={id} maxLength={maxLength} lang={field === "meaning" || field === "translation" ? "en" : "ja"} value={example[field] ?? ""}
                     aria-invalid={invalid || undefined} aria-describedby={invalid ? `${id}-error` : undefined}
                     onChange={(event) => change(examples.map((word, i) => i === index ? { ...word, [field]: event.target.value } : word))} />
                   {invalid ? <span id={`${id}-error`} className="error" role="alert">{issue.message}</span> : null}
@@ -106,6 +108,39 @@ function KanjiExamples({ examples }: { examples?: KanjiExample[] }) {
   return examples?.length ? <div className="kanji-examples">{examples.map((example) => (
     <div key={kanjiExampleKey(example)}><Term entry={{ ...example, kind: "Vocabulary" }} /> <span>· {example.meaning}</span><PartsOfSpeech parts={example.partsOfSpeech} /></div>
   ))}</div> : null;
+}
+
+function KanjiReviewExamples({ card, entries, allowSuggestions }: { card: Entry; entries: Entry[]; allowSuggestions: boolean }) {
+  const [suggestions, setSuggestions] = useState<KanjiExample[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const words = reviewExamples(card, entries, suggestions);
+
+  async function suggest() {
+    setLoading(true);
+    setError("");
+    try { setSuggestions(await post<KanjiExample[]>("kanji-review-examples", { id: card.id })); }
+    catch (problem) { setError(errorMessage(problem)); }
+    finally { setLoading(false); }
+  }
+
+  if (!words.length && !allowSuggestions) return null;
+  return (
+    <section className="panel review-examples" aria-label="Words and expressions">
+      <h3>Words and expressions</h3>
+      {words.length ? <ul>{words.map((word) => (
+        <li key={kanjiExampleKey(word)}>
+          <div className="review-word"><strong lang="ja">{word.term}</strong> <span lang="ja">{kana(word.reading)}</span></div>
+          <p>{word.meaning}<PartsOfSpeech parts={word.partsOfSpeech} /></p>
+          {word.sentence ? <p className="review-sentence" lang="ja">{word.sentence}</p> : null}
+          {word.translation ? <p className="muted">{word.translation}</p> : null}
+        </li>
+      ))}</ul> : <p className="muted">Suggest words that use {card.term} to practise it in context.</p>}
+      {allowSuggestions && !suggestions.length ? <button type="button" className="text-button" disabled={loading} onClick={suggest}>{loading ? "Finding examples…" : "Suggest examples with AI"}</button> : null}
+      {suggestions.length ? <p className="muted">AI suggestions are for this review.</p> : null}
+      {error ? <p className="error" role="alert">{error}</p> : null}
+    </section>
+  );
 }
 
 export function EntryEditor({ entry, close, save, remove }: {
@@ -303,7 +338,6 @@ export function FlashcardSession({ queue, mode, entries, rate, close }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const card = queue[index];
-  const example = entries.find((entry) => entry.kind === "Vocabulary" && card && entry.term.includes(card.term));
   const modeTitle = mode === "Sample" ? "Sample review" : mode === "Similar" ? "Similar kanji" : modes.find((item) => item.name === mode)?.title;
 
   useEffect(() => {
@@ -347,10 +381,11 @@ export function FlashcardSession({ queue, mode, entries, rate, close }: {
       <div className="flashcard panel">
         <span className="hero-label">{flipped ? "ANSWER" : "RECALL THE READING AND MEANING"}</span>
         <span className="flash-kanji"><span lang="ja">{card.term}</span><JlptStar entry={card} /></span>
-        {flipped ? <div className="flash-answer"><p lang="ja">{card.reading}</p><h2 tabIndex={-1} ref={answer}>{card.meaning}</h2><KanjiExamples examples={card.examples?.length ? card.examples : example ? [example] : []} /></div> : (
+        {flipped ? <div className="flash-answer"><p lang="ja">{card.reading}</p><h2 tabIndex={-1} ref={answer}>{card.meaning}</h2></div> : (
           <button ref={flipButton} className="button ink" onClick={() => { advanceLock.current = false; setFlipped(true); }}><RotateCcw size={16} /> Show answer</button>
         )}
       </div>
+      {flipped ? <KanjiReviewExamples key={card.id} card={card} entries={entries} allowSuggestions={mode !== "Sample"} /> : null}
       {flipped ? <div className="rating-buttons">{(Object.keys(intervals) as Rating[]).map((rating) => <button key={rating} className={`rating ${rating.toLowerCase()}`} disabled={saving} onClick={() => submitRating(rating)}><strong>{rating}</strong>{mode === "Sample" ? null : <span>{intervals[rating]} {intervals[rating] === 1 ? "day" : "days"}</span>}</button>)}</div> : null}
       {error ? <p className="error" role="alert">{error}</p> : null}
     </section>

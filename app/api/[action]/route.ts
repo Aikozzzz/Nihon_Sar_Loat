@@ -3,7 +3,7 @@ import { AppError, database } from "../../../lib/database";
 import { accountEmailOrigin, checkOrigin, identifier, isLoopback, readJson } from "../../../lib/http";
 import { cancelImport, confirmImport, importFor, importsFor, queueImport, retryImport } from "../../../lib/imports";
 import { entriesFor, pairsFor, passagesFor, rateEntry, removeEntry, saveEntry, savePair } from "../../../lib/library";
-import { generateReading } from "../../../lib/reading";
+import { generateKanjiExamples, generateReading } from "../../../lib/reading";
 import { studyState } from "../../../lib/study-state";
 
 export const runtime = "nodejs";
@@ -94,6 +94,8 @@ export async function POST(request: Request, context: Context) {
       }
       case "reading":
         return json(await generateReading(owner, body));
+      case "kanji-review-examples":
+        return json(await generateKanjiExamples(owner, identifier(body.id)));
       case "save-reading": {
         if (typeof body.saved !== "boolean") throw new AppError("Choose whether to save this passage.");
         const result = await db.query("UPDATE nihon_private.passages SET saved=$1 WHERE owner=$2 AND id=$3", [Number(body.saved), owner, identifier(body.id)]);
