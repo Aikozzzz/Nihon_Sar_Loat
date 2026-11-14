@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { AppError, database, lockAccount, transaction } from "./database.ts";
+import { isLoopback } from "./http.ts";
 
 const cookieName = "nihon_session";
 const sessionLife = 30 * 86_400_000;
@@ -48,7 +49,7 @@ async function startSession(id: string, expectedPassword?: string) {
   });
   jar.set(cookieName, token, {
     httpOnly: true, sameSite: "lax", path: "/", maxAge: sessionLife / 1000,
-    secure: process.env.NIHON_SECURE_COOKIES === "1" || process.env.NIHON_ORIGIN?.startsWith("https://"),
+    secure: process.env.NIHON_SECURE_COOKIES === "1" || (process.env.VERCEL === "1" && process.env.VERCEL_ENV !== "development") || process.env.NIHON_ORIGIN?.trim().startsWith("https://"),
   });
 }
 
@@ -76,23 +77,31 @@ function strongPassword(input: unknown) {
   return input;
 }
 
-async function sendLink(id: string, email: string, purpose: Purpose, origin: string, next: string) {
+function emailDelivery(origin: string | undefined) {
+  if (!origin) throw new AppError("Email delivery is unavailable. Try again in a moment.", 503);
+  const local = process.env.NODE_ENV === "development" && process.env.NIHON_DEV_EMAIL_LINKS === "1" && isLoopback(new URL(origin));
+  const apiKey = process.env.RESEND_API_KEY;
+  const sender = process.env.NIHON_EMAIL_FROM;
+  if (!local && (!apiKey || !sender)) throw new AppError("Email delivery is unavailable. Try again in a moment.", 503);
+  return { origin, local, apiKey, sender };
+}
+
+async function sendLink(id: string, email: string, purpose: Purpose, delivery: ReturnType<typeof emailDelivery>, next: string) {
   const db = database();
   const token = randomBytes(32).toString("hex");
   const hash = hashToken(token);
   const life = purpose === "verify" ? 24 * 60 : 30;
   await db.query("INSERT INTO nihon_private.email_tokens(token,owner,purpose,expires,return_to) VALUES ($1,$2,$3,$4,$5)",
     [hash, id, purpose, Date.now() + life * 60_000, next]);
-  const link = new URL(purpose === "verify" ? "/verify-email" : "/reset-password", origin);
+  const link = new URL(purpose === "verify" ? "/verify-email" : "/reset-password", delivery.origin);
   link.hash = token;
-  if (process.env.NODE_ENV === "development" && process.env.NIHON_DEV_EMAIL_LINKS === "1" && ["localhost", "127.0.0.1", "[::1]"].includes(link.hostname)) return link.href;
+  if (delivery.local) return link.href;
   try {
-    if (!process.env.RESEND_API_KEY || !process.env.NIHON_EMAIL_FROM || !process.env.NIHON_ORIGIN) throw new Error("Email configuration missing");
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST", signal: AbortSignal.timeout(10_000),
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${delivery.apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: process.env.NIHON_EMAIL_FROM, to: [email],
+        from: delivery.sender, to: [email],
         subject: purpose === "verify" ? "Verify your Nihon Sar Loat email" : "Reset your Nihon Sar Loat password",
         text: `${purpose === "verify" ? "Verify your email" : "Reset your password"} using this link: ${link.href}\n\nThe link expires in ${life === 30 ? "30 minutes" : "24 hours"}. If you did not request it, you can ignore this email.`,
       }),
@@ -105,7 +114,7 @@ async function sendLink(id: string, email: string, purpose: Purpose, origin: str
   }
 }
 
-export async function authenticate(body: Record<string, unknown>, signup: boolean, client: string, origin: string) {
+export async function authenticate(body: Record<string, unknown>, signup: boolean, client: string, origin: string | undefined) {
   const email = emailAddress(body.email);
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const password = signup ? strongPassword(body.password) : body.password;
@@ -121,11 +130,12 @@ export async function authenticate(body: Record<string, unknown>, signup: boolea
   const next = returnTo(body.next);
   if (signup) {
     if (previous) throw new AppError("This email already has an account. Log in or resend your verification link.", 409);
+    const delivery = emailDelivery(origin);
     const id = randomUUID();
     const inserted = await db.query("INSERT INTO nihon_private.accounts(id,name,email,password) VALUES ($1,$2,$3,$4) ON CONFLICT(email) DO NOTHING",
       [id, name, email, `${salt}:${computed.toString("hex")}`]);
     if (!inserted.rowCount) throw new AppError("This email already has an account. Log in or resend your verification link.", 409);
-    const link = await sendLink(id, email, "verify", origin, next);
+    const link = await sendLink(id, email, "verify", delivery, next);
     return { pending: true, link };
   }
   if (!previous || digest.length !== 128 || !timingSafeEqual(computed, Buffer.from(digest, "hex"))) throw new AppError("The email or password is incorrect.", 401);
@@ -135,14 +145,15 @@ export async function authenticate(body: Record<string, unknown>, signup: boolea
   return { next: previous.onboarded ? next : "/onboarding" };
 }
 
-export async function requestEmail(body: Record<string, unknown>, purpose: Purpose, client: string, origin: string) {
+export async function requestEmail(body: Record<string, unknown>, purpose: Purpose, client: string, origin: string | undefined) {
   const email = emailAddress(body.email);
+  const delivery = emailDelivery(origin);
   await throttle("email", email, client);
   const { rows: [row] } = await database().query<{ id: string; verified: string | null }>(`
     SELECT a.id,v.owner AS verified FROM nihon_private.accounts a
     LEFT JOIN nihon_private.verified_accounts v ON v.owner=a.id WHERE a.email=$1`, [email]);
   const eligible = row && (purpose === "verify" ? !row.verified : row.verified);
-  return { link: eligible ? await sendLink(String(row.id), email, purpose, origin, returnTo(body.next)) : undefined };
+  return { link: eligible ? await sendLink(String(row.id), email, purpose, delivery, returnTo(body.next)) : undefined };
 }
 
 export async function redeemEmail(body: Record<string, unknown>, purpose: Purpose) {

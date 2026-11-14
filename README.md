@@ -28,8 +28,9 @@ The transfer preserves account verification, password hashes, study history, and
 
 ## Configure a hosted instance
 
+- If PostgreSQL reports a TLS certificate error, download the CA from Supabase **Database Settings → SSL Configuration** and set `NIHON_DATABASE_CA_PEM` to its full PEM contents. This setting works in both the Vercel web app and its PDF daemon and takes precedence over `NIHON_DATABASE_CA_FILE`. [Supabase TLS setup](https://supabase.com/docs/guides/database/psql)
 - Set `GROQ_API_KEY` and choose a strict Structured Outputs model with `GROQ_MODEL`. Benchmark the model with permission-cleared study pages and Japanese reading samples before the pilot.
-- Set `RESEND_API_KEY`, `NIHON_EMAIL_FROM` to a verified sender, and `NIHON_ORIGIN` to the app’s HTTPS origin. Keep `NIHON_DEV_EMAIL_LINKS` disabled.
+- Set `RESEND_API_KEY` and set `NIHON_EMAIL_FROM` to a sender on a verified domain. For verification and reset emails, set `NIHON_ORIGIN` to the app’s public HTTPS origin. A Vercel production deployment can also use `VERCEL_PROJECT_PRODUCTION_URL` when system environment variables are exposed. Keep `NIHON_DEV_EMAIL_LINKS` disabled in production.
 - Run `npm run build`, then run `npm start` and `npm run worker` as supervised processes with the same `DATABASE_URL`. PostgreSQL stores study records and temporary PDF uploads in the private `nihon_private` schema. Keep the connection string server-side. Configure the reverse proxy to accept 50 MB PDF uploads and allow at least 100 seconds for reading generation. Confirm the applicable Groq retention settings before accepting learner uploads.
 
 Provider setup details are available in the [Supabase connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres), [Groq Structured Outputs documentation](https://console.groq.com/docs/structured-outputs), and [Resend email API reference](https://resend.com/docs/api-reference/emails/send-email).

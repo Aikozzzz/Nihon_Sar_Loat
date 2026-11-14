@@ -26,12 +26,13 @@ export function database() {
     url.searchParams.delete(option);
   }
   const caFile = process.env.NIHON_DATABASE_CA_FILE;
+  const ca = process.env.NIHON_DATABASE_CA_PEM?.trim() || (caFile ? readFileSync(caFile, "utf8") : undefined);
   pool = new pg.Pool({
     connectionString: url.toString(),
     max: 5,
     connectionTimeoutMillis: 5_000,
-    ssl: local && (!sslmode || sslmode === "disable") && !caFile
-      ? false : { rejectUnauthorized: true, ca: caFile ? readFileSync(caFile, "utf8") : undefined },
+    ssl: local && (!sslmode || sslmode === "disable") && !ca
+      ? false : { rejectUnauthorized: true, ca },
     types: {
       getTypeParser(oid: number, format?: "text" | "binary") {
         // The app stores millisecond timestamps as bigint and exposes them as JS numbers.
