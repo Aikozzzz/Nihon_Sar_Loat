@@ -12,7 +12,7 @@ const cards: Entry[] = [
 export function SampleSession({ onboarding }: { onboarding: boolean }) {
   return <>
     <PageHeading title="Sample flashcards">Recall each reading and meaning before you flip.</PageHeading>
-    <FlashcardSession queue={cards} mode="Sample" entries={[]} rate={async (entry) => {
+    <FlashcardSession queue={cards} mode="Sample" rate={async (entry) => {
       if (onboarding && entry.id === cards.at(-1)?.id) await post("onboard");
     }} close={() => window.location.assign("/study")} />
   </>;

@@ -1,10 +1,11 @@
 import { account, authenticate, redeemEmail, requestEmail, signOut } from "../../../lib/auth";
 import { AppError, database } from "../../../lib/database";
-import { accountEmailOrigin, checkOrigin, identifier, isLoopback, readJson } from "../../../lib/http";
+import { accountEmailOrigin, checkOrigin, field, identifier, isLoopback, readJson } from "../../../lib/http";
 import { cancelImport, confirmImport, importFor, importsFor, queueImport, retryImport } from "../../../lib/imports";
 import { entriesFor, pairsFor, passagesFor, rateEntry, removeEntry, saveEntry, savePair } from "../../../lib/library";
 import { generateKanjiExamples, generateReading } from "../../../lib/reading";
 import { studyState } from "../../../lib/study-state";
+import { addKanjiReviewExamples, compoundReviewsFor, rateCompound } from "../../../lib/compound-reviews";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,6 +81,9 @@ export async function POST(request: Request, context: Context) {
       case "rate":
         await rateEntry(owner, identifier(body.id), body.rating, identifier(body.event));
         return json(await entriesFor(owner));
+      case "rate-compound":
+        await rateCompound(owner, field(body.kanji, "kanji", 2), field(body.term, "word", 60), field(body.reading, "furigana", 160), body.rating, identifier(body.event));
+        return json(await compoundReviewsFor(owner));
       case "pair":
         await savePair(owner, identifier(body.first), identifier(body.second));
         return json(await pairsFor(owner));
@@ -96,6 +100,9 @@ export async function POST(request: Request, context: Context) {
         return json(await generateReading(owner, body));
       case "kanji-review-examples":
         return json(await generateKanjiExamples(owner, identifier(body.id)));
+      case "add-kanji-review-examples":
+        await addKanjiReviewExamples(owner, identifier(body.id), body.examples);
+        return json(await entriesFor(owner));
       case "save-reading": {
         if (typeof body.saved !== "boolean") throw new AppError("Choose whether to save this passage.");
         const result = await db.query("UPDATE nihon_private.passages SET saved=$1 WHERE owner=$2 AND id=$3", [Number(body.saved), owner, identifier(body.id)]);

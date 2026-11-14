@@ -53,7 +53,10 @@ export type Passage = {
 };
 
 export const formatOptions: Format[] = ["Notice", "Short article"];
-export type StudyState = { entries: Entry[]; pairs: Pair[]; imports: ImportSummary[]; passages: Passage[] };
+export type CompoundReview = { term: string; reading: string; rating: Rating; dueAt: number };
+export type CompoundCard = KanjiExample & { kind: "Compound"; id: string; kanji: string };
+export type ReviewCard = Entry | CompoundCard;
+export type StudyState = { entries: Entry[]; pairs: Pair[]; imports: ImportSummary[]; passages: Passage[]; compoundReviews: CompoundReview[] };
 export const pageLimit = 20;
 export const fileLimit = 50 * 1024 * 1024;
 export const exampleSentenceLimit = 300;
@@ -166,7 +169,7 @@ export function kanjiExampleIssue(example: KanjiExample, kanji: string) {
   if (example.translation?.trim() && !example.sentence?.trim()) return { field: "sentence" as const, message: "Enter the Japanese example sentence." };
 }
 
-export function kanjiExampleKey(example: KanjiExample) {
+export function kanjiExampleKey(example: Pick<KanjiExample, "term" | "reading">) {
   return entryKey({ ...example, kind: "Vocabulary" });
 }
 
