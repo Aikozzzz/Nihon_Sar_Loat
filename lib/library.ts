@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
-import { entryKey, intervals, isPartOfSpeech, kanjiExampleIssue, mergeKanjiExamples, mergeMeanings, mergePartsOfSpeech, normalize, validateEntry, type Entry, type KanjiExample, type Pair, type PartOfSpeech, type Passage, type Rating, type SourceReference } from "../app/study-data.ts";
+import { entryKey, intervals, isPartOfSpeech, kanjiExampleIssue, mergeKanjiExamples, mergeMeanings, mergePartsOfSpeech, normalize, normalizeReading, validateEntry, type Entry, type KanjiExample, type Pair, type PartOfSpeech, type Passage, type Rating, type SourceReference } from "../app/study-data.ts";
 import { AppError, database, lockAccount, transaction } from "./database.ts";
 
 type EntryRow = Omit<Entry, "source" | "page" | "sources" | "rating" | "dueAt"> & { rating: Rating | null; due: number | null; studied: number; parts_of_speech: PartOfSpeech[] };
@@ -33,7 +33,7 @@ export async function writeEntry(db: PoolClient, owner: string, input: unknown, 
   if (data.kind !== "Kanji" && data.kind !== "Vocabulary") throw new AppError("Choose Kanji or Vocabulary.");
   const invalid = validateEntry(data);
   if (invalid) throw new AppError(invalid);
-  const entry = { ...data, term: normalize(data.term), reading: normalize(data.reading), meaning: data.meaning.trim() };
+  const entry = { ...data, term: normalize(data.term), reading: normalizeReading(data.kind, data.reading), meaning: data.meaning.trim() };
   const parts = readPartsOfSpeech(data.partsOfSpeech);
   if (entry.kind === "Kanji" && parts?.length) throw new AppError("Assign parts of speech to words.");
   let examples: KanjiExample[] | undefined;
@@ -65,7 +65,7 @@ export async function writeEntry(db: PoolClient, owner: string, input: unknown, 
       [key, entry.term, entry.reading, entry.meaning, JSON.stringify(mergeKanjiExamples([], updated)), parts ?? null, owner, id]);
   } else if (existing) {
     id = existing.id;
-    const reading = entry.kind === "Kanji" ? [...new Set(`${existing.reading}・${entry.reading}`.split(/[・、]/).map((value) => value.trim()).filter(Boolean))].join("・") : existing.reading;
+    const reading = entry.kind === "Kanji" ? [...new Set(`${normalizeReading("Kanji", existing.reading)}・${entry.reading}`.split(/[・、]/).map((value) => value.trim()).filter(Boolean))].join("・") : existing.reading;
     await db.query("UPDATE nihon_private.entries SET meaning=$1, reading=$2, examples=$3, parts_of_speech=$4 WHERE owner=$5 AND id=$6",
       [mergeMeanings(existing.meaning, entry.meaning), reading, JSON.stringify(mergeKanjiExamples(existing.examples, examples ?? [])), mergePartsOfSpeech(existing.parts_of_speech, parts), owner, id]);
   } else {
