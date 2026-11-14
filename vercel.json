@@ -4,7 +4,7 @@
     "pdf-worker": {
       "root": ".",
       "entrypoint": "Dockerfile.worker",
-      "instances": { "iad1": 1 }
+      "instances": { "sin1": 1 }
     }
   }
 }
