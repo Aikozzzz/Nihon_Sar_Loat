@@ -28,8 +28,19 @@ The transfer preserves account verification, password hashes, study history, and
 
 ## Configure a hosted instance
 
+- If PostgreSQL reports a TLS certificate error, download the CA from Supabase **Database Settings → SSL Configuration** and set `NIHON_DATABASE_CA_PEM` to its full PEM contents. This setting works in both the Vercel web app and its PDF daemon and takes precedence over `NIHON_DATABASE_CA_FILE`. [Supabase TLS setup](https://supabase.com/docs/guides/database/psql)
 - Set `GROQ_API_KEY` and choose a strict Structured Outputs model with `GROQ_MODEL`. Benchmark the model with permission-cleared study pages and Japanese reading samples before the pilot.
-- Set `RESEND_API_KEY`, `NIHON_EMAIL_FROM` to a verified sender, and `NIHON_ORIGIN` to the app’s HTTPS origin. Keep `NIHON_DEV_EMAIL_LINKS` disabled.
+- Set `RESEND_API_KEY` and set `NIHON_EMAIL_FROM` to a sender on a verified domain. For verification and reset emails, set `NIHON_ORIGIN` to the app’s public HTTPS origin. A Vercel production deployment can also use `VERCEL_PROJECT_PRODUCTION_URL` when system environment variables are exposed. Keep `NIHON_DEV_EMAIL_LINKS` disabled in production.
 - Run `npm run build`, then run `npm start` and `npm run worker` as supervised processes with the same `DATABASE_URL`. PostgreSQL stores study records and temporary PDF uploads in the private `nihon_private` schema. Keep the connection string server-side. Configure the reverse proxy to accept 50 MB PDF uploads and allow at least 100 seconds for reading generation. Confirm the applicable Groq retention settings before accepting learner uploads.
 
 Provider setup details are available in the [Supabase connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres), [Groq Structured Outputs documentation](https://console.groq.com/docs/structured-outputs), and [Resend email API reference](https://resend.com/docs/api-reference/emails/send-email).
+
+## CI/CD on GitHub and Vercel
+
+The [CI workflow](.github/workflows/ci.yml) checks pull requests targeting `main` and pushes to `main`. It installs from the npm lockfile, builds Next.js, checks TypeScript, and builds and smoke-tests the Linux PDF worker image. The job uses no deployment secrets.
+
+1. In Vercel, link the repository and set `main` as the production branch. Keep automatic production domain assignment enabled. Vercel builds previews from Git and rolls out the PDF daemon when a deployment goes live in production.
+2. Once GitHub has run CI on a commit on `main`, open **Settings → Build and Deployment → Deployment Checks** in Vercel. Choose **Add Checks → GitHub** and require **Build web and PDF worker**. With this check enabled, Vercel waits for CI to pass before promoting the production build. [Vercel Deployment Checks](https://vercel.com/docs/deployment-checks#adding-github-checks)
+3. In GitHub, add a ruleset for `main` that requires a pull request and the **Build web and PDF worker** status check to pass before merging. [GitHub branch protection](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
+
+Keep production credentials in Vercel's **Production** environment. Apply new SQL migrations to the target Supabase project before merging code that requires them. The GitHub Actions job builds the worker image, while Vercel's Daemon runtime starts the worker in production. On Vercel, PDF uploads through the existing API route are subject to the [4.5 MB Functions payload limit](https://vercel.com/docs/functions/limitations#request-body-size).

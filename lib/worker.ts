@@ -69,9 +69,11 @@ async function processPage(job: Job) {
       "Use Kanji for standalone characters explicitly taught as characters. Do not create additional Kanji entries by splitting vocabulary words. Return an empty examples array unless the entry is Kanji.",
       "For vocabulary, put the complete Japanese headword in term, using its kanji spelling and any attached kana when attested or unambiguous. Keep words normally written in kana in kana. When the intended kanji spelling is unclear, preserve the source spelling and mark it low confidence.",
       "Use the coordinates, font sizes and direction to associate furigana with its headword. Put furigana separately in reading using hiragana or katakana. For vocabulary, provide one pronunciation of the entire word. For single kanji, separate relevant readings with ・ and keep optional okurigana in parentheses.",
-      "Use concise English meanings that match the exact headword. Mark any supplied meaning or reading in aiFields. Mark uncertain entries low confidence.",
+      "Keep readings and meanings that are clearly associated with the headword on the page. Translate a clear source gloss into concise English when needed.",
+      "For a clearly identified kanji or vocabulary headword, fill missing furigana and English meaning using common dictionary readings and senses. Use the surrounding examples to choose the sense or reading when they provide enough context. For standalone kanji, suggest common readings even if the page gives no example. For vocabulary with several plausible readings or senses, suggest a value only when the source or common usage makes it clear.",
+      "In aiFields, include reading and/or meaning for each headword value you supplied from your own knowledge. Mark entries low confidence if you supplied a value or if the source is uncertain. Leave an individual field empty only when you cannot offer a reliable suggestion. If the headword itself cannot be identified reliably, skip it.",
       "For each Vocabulary headword and kanji example, label the partsOfSpeech that match the senses in the source. Distinguish i-adjective from na-adjective by grammar. Use multiple labels only when supported, such as noun and na-adjective. A bare suru-noun with only a noun sense is a noun. Use an empty partsOfSpeech array when uncertain or for single Kanji entries.",
-      "Use an empty string when a field cannot be determined. Return an empty array when the page has no useful targets.",
+      "Return an empty array when the page has no useful targets.",
     ];
     if (importKind === "Kanji") {
       instructions.push(
@@ -131,7 +133,7 @@ while (!stopping) {
     const problem = code === "28P01" ? "Database authentication failed. Check the password in DATABASE_URL."
       : code === "42P01" || code === "3F000" ? "Study tables are missing. Apply the Supabase migration."
       : code === "42501" ? "The database user cannot access the study schema."
-      : typeof code === "string" && /CERT|SELF_SIGNED|ISSUER/.test(code) ? "TLS verification failed. Check NIHON_DATABASE_CA_FILE."
+      : typeof code === "string" && /CERT|SELF_SIGNED|ISSUER/.test(code) ? "TLS verification failed. Check NIHON_DATABASE_CA_PEM or NIHON_DATABASE_CA_FILE."
       : "Could not reach or update the study database.";
     console.error(`[PDF worker] ${problem} Retrying.`);
     ready = false;

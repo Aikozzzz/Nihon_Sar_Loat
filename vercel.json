@@ -3,7 +3,7 @@
   "daemons": {
     "pdf-worker": {
       "root": ".",
-      "entrypoint": "Dockerfile.worker",
+      "entrypoint": "dockerfile.worker",
       "instances": { "sin1": 1 }
     }
   }
