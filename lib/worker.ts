@@ -131,7 +131,7 @@ while (!stopping) {
     const problem = code === "28P01" ? "Database authentication failed. Check the password in DATABASE_URL."
       : code === "42P01" || code === "3F000" ? "Study tables are missing. Apply the Supabase migration."
       : code === "42501" ? "The database user cannot access the study schema."
-      : typeof code === "string" && /CERT|SELF_SIGNED|ISSUER/.test(code) ? "TLS verification failed. Check NIHON_DATABASE_CA_FILE."
+      : typeof code === "string" && /CERT|SELF_SIGNED|ISSUER/.test(code) ? "TLS verification failed. Check NIHON_DATABASE_CA_PEM or NIHON_DATABASE_CA_FILE."
       : "Could not reach or update the study database.";
     console.error(`[PDF worker] ${problem} Retrying.`);
     ready = false;

@@ -54,11 +54,33 @@ export async function readJson(request: Request, limit = 32_768) {
 
 export function checkOrigin(request: Request) {
   const origin = request.headers.get("origin");
-  const configured = process.env.NIHON_ORIGIN;
+  const fetchSite = request.headers.get("sec-fetch-site");
   const host = request.headers.get("host");
-  const allowed = configured ? origin === configured : origin === new URL(request.url).origin
-    || (host && (origin === `http://${host}` || origin === `https://${host}`));
-  if (request.headers.get("sec-fetch-site") === "cross-site" || (origin && !allowed)) {
+  const url = new URL(request.url);
+  const forwardedProtocol = request.headers.get("x-forwarded-proto");
+  const protocol = process.env.VERCEL === "1" && process.env.VERCEL_ENV !== "development" ? "https:"
+    : process.env.NIHON_TRUST_PROXY === "1" && (forwardedProtocol === "https" || forwardedProtocol === "http")
+      ? `${forwardedProtocol}:` : url.protocol;
+  const target = host ? `${protocol}//${host}` : url.origin;
+  if (fetchSite === "cross-site" || fetchSite === "same-site" || (origin && origin !== target)) {
     throw new AppError("Open the app directly and try again.", 403);
   }
+}
+
+export function accountEmailOrigin() {
+  const configured = process.env.NIHON_ORIGIN?.trim();
+  if (configured) {
+    const url = URL.parse(configured);
+    if (!url || url.username || url.password || url.pathname !== "/" || url.search || url.hash) return undefined;
+    if (url.protocol === "https:" || (process.env.NODE_ENV === "development" && url.protocol === "http:" && isLoopback(url))) {
+      return url.origin;
+    }
+    return undefined;
+  }
+  const vercelHost = process.env.VERCEL_ENV === "production" && process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (vercelHost) return `https://${vercelHost}`;
+}
+
+export function isLoopback(url: URL) {
+  return ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
 }
