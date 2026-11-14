@@ -80,6 +80,13 @@ export function kana(value: string) {
   return normalize(value).replace(/[ァ-ヶ]/g, (letter) => String.fromCharCode(letter.charCodeAt(0) - 0x60));
 }
 
+export function normalizeReading(kind: Kind, value: string) {
+  const reading = normalize(value);
+  if (kind !== "Kanji") return reading;
+  // KANJIDIC uses a period before okurigana. The app displays that suffix in parentheses.
+  return reading.replace(/(^|[・、,;/\s])([\p{Script=Hiragana}\p{Script=Katakana}ー]+)\.([\p{Script=Hiragana}\p{Script=Katakana}ー]+)(?=$|[・、,;/\s])/gu, "$1$2($3)");
+}
+
 export function entryKey(entry: Pick<Entry, "kind" | "term" | "reading">) {
   return entry.kind === "Kanji" ? normalize(entry.term) : `${normalize(entry.term)}\u0000${kana(entry.reading).replace(/\s/g, "")}`;
 }
@@ -123,7 +130,7 @@ export function entryIssue(entry: Pick<Entry, "kind" | "term" | "reading" | "mea
   if (!/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(term)) {
     return { field: "term", message: "Enter the word in Japanese." };
   }
-  let reading = normalize(entry.reading);
+  let reading = normalizeReading(entry.kind, entry.reading);
   if (entry.kind === "Kanji") {
     // Some dictionaries mark where kana attach to a kanji reading with a dash.
     reading = reading.replace(/[-‐‑−]/g, "");

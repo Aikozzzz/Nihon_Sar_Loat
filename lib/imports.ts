@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
-import { fileLimit, importKindForJob, importKindFromFilename, mergeKanjiExamples, normalize, pageRange, partOfSpeechLabels, type Candidate, type Entry, type ImportJob, type ImportKind, type ImportPage, type ImportSummary, type KanjiExample } from "../app/study-data.ts";
+import { fileLimit, importKindForJob, importKindFromFilename, mergeKanjiExamples, normalize, normalizeReading, pageRange, partOfSpeechLabels, type Candidate, type Entry, type ImportJob, type ImportKind, type ImportPage, type ImportSummary, type KanjiExample } from "../app/study-data.ts";
 import { AppError, database, lockAccount, metric, transaction } from "./database.ts";
 import { requireGroq } from "./groq.ts";
 import { field, identifier, object, readBytes } from "./http.ts";
@@ -69,6 +69,7 @@ function previewPages(rows: PageRow[], job: ImportRow): ImportPage[] {
     page, status, ocr: Boolean(ocr), error: error ?? undefined,
     candidates: groupLegacyCandidates(candidates ?? [], kind).map(({ partsOfSpeech, examples, ...entry }): Candidate => ({
       ...entry,
+      reading: normalizeReading(entry.kind, entry.reading),
       suggestedPartsOfSpeech: partsOfSpeech,
       examples: examples?.map(({ partsOfSpeech, ...example }) => ({ ...example, suggestedPartsOfSpeech: partsOfSpeech })),
     })),
